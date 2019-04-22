@@ -12,17 +12,51 @@ import android.graphics.Color;
 import android.os.Build;
 import android.os.IBinder;
 import android.support.annotation.RequiresApi;
+import android.util.Log;
 
 import com.linfeng.saatisticsdemo.R;
 import com.linfeng.statisticsdemo.client.MainActivity;
+import com.linfeng.statisticsdemo.isystem.AppRunStateEvent;
+import com.linfeng.statisticsdemo.isystem.OnSysEventReceive;
+import com.linfeng.statisticsdemo.isystem.SystemEnvironment;
+import com.linfeng.statisticsdemo.isystem.SystemProxy;
+import com.linfeng.statisticsdemo.service.analyzer.AnalyzerResult;
+import com.linfeng.statisticsdemo.service.analyzer.IEventAnalyzer;
+import com.linfeng.statisticsdemo.service.analyzer.IEventAnalyzerImpl;
+
+import static com.linfeng.statisticsdemo.service.analyzer.AnalyzerResult.ACTION.KILL;
+import static com.linfeng.statisticsdemo.service.analyzer.AnalyzerResult.ACTION.NO_START_TODAY;
 
 /**
  * Created by linfeng on 2019/4/21  18:16
  * Email zhanglinfengdev@163.com
  * Function details...
  */
-public class AppStatisticsService extends Service {
+public class AppStatisticsService extends Service implements OnSysEventReceive, IEventAnalyzer.AnalyzerCallback {
 
+    private IEventAnalyzer eventAnalyzer;
+    private SystemProxy iSystem;
+
+    @Override
+    public void onReceive(AppRunStateEvent event) {
+        Log.d("Linfeng", "OnReceiveEvent:" + event);
+        if (eventAnalyzer != null) {
+            eventAnalyzer.analyzer(event);
+        }
+    }
+
+    //通知系统执行
+    @Override
+    public void onAnanyzerResult(AnalyzerResult result) {
+        switch (result.action) {
+            case KILL:
+                iSystem.killPro((int) result.data.pId);
+                break;
+            case NO_START_TODAY:
+                iSystem.banStarted(result.data.appName, (long) (1000 * 60 * 60 * 24 * 0.1));
+                return;
+        }
+    }
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -32,6 +66,12 @@ public class AppStatisticsService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        eventAnalyzer = new IEventAnalyzerImpl(this);
+        monitorSystem();
+    }
+
+    private void monitorSystem() {
+        iSystem = SystemEnvironment.register(this);
     }
 
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
@@ -41,13 +81,11 @@ public class AppStatisticsService extends Service {
         return super.onStartCommand(intent, flags, startId);
     }
 
-
     @Override
     public void onDestroy() {
         stopForeground(true);
         super.onDestroy();
     }
-
 
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
     private void startForeground() {
@@ -66,28 +104,23 @@ public class AppStatisticsService extends Service {
 
         Bitmap icon = BitmapFactory.decodeResource(getResources(), R.mipmap.ic_launcher);
         Notification notification = null;
+        Notification.Builder builder = new Notification.Builder(getApplicationContext())
+                .setContentTitle("StatistiscsService")
+                .setContentText("Running")
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setLargeIcon(icon);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notification = new Notification.Builder(getApplicationContext())
-                    .setChannelId(CHANNEL_ONE_ID)
-                    .setContentTitle("StatistiscsService")
-                    .setContentText("Running")
-                    .setSmallIcon(R.mipmap.ic_launcher)
-                    .setLargeIcon(icon)
-                    .build();
-        } else {
-            notification = new Notification.Builder(getApplicationContext())
-                    .setContentTitle("StatistiscsService")
-                    .setContentText("Running")
-                    .setSmallIcon(R.mipmap.ic_launcher)
-                    .setLargeIcon(icon)
-                    .build();
+            builder.setChannelId(CHANNEL_ONE_ID);
         }
+
+        notification = builder.build();
 
         Intent notificationIntent = new Intent(getApplicationContext(), MainActivity.class);
         notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         notification.contentIntent = PendingIntent.getActivity(getApplicationContext(), 0, notificationIntent, 0);
 
-
         startForeground(1234, notification);
     }
+
+
 }

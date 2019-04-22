@@ -10,6 +10,8 @@ import com.linfeng.statisticsdemo.IStatisticsAidlInterface;
  * Function details...
  */
 public class Server extends IStatisticsAidlInterface.Stub {
+
+
     @Override
     public void basicTypes(int anInt, long aLong, boolean aBoolean, float aFloat, double aDouble, String aString) throws RemoteException {
 
